@@ -1,0 +1,60 @@
+/* Hello World in Groovy */
+pipeline {
+    agent any
+    
+    stages {
+        stage('clone') {
+            steps {
+                git changelog: false, poll: false, url: 'https://github.com/Preetham0171999/maven_test.git'
+            }
+        }
+        
+        stage('build') {
+            steps {
+                sh "${tool 'maven_j'}/bin/mvn clean package -DskipTests=true"
+            }
+        }
+        
+        stage('owasp scan') {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./ ', odcInstallation: 'DP'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+        
+        stage('nexus') {
+            steps {
+                nexusArtifactUploader artifacts: [[artifactId: 'A6', classifier: '', file: 'webapp/target/webapp.war', type: 'war']], 
+                                     credentialsId: '59f876e2-b554-41f3-94c4-9152b5751875', 
+                                     groupId: 'G9', 
+                                     nexusUrl: 'http://35.154.29.236:8081', // Corrected Nexus URL
+                                     nexusVersion: 'nexus3', 
+                                     protocol: 'http', 
+                                     repository: 'scanrepo', 
+                                     version: "${BUILD_NUMBER}"
+            }
+        }
+        
+        stage('tomcat') { // Corrected stage name from 'tomccat' to 'tomcat'
+            steps {
+                deploy adapters: [tomcat9(credentialsId: 'dc2ae62e-5487-488c-a196-ec518ed0284b', 
+                                          path: '', 
+                                          url: 'http://65.0.45.4:8080')], 
+                       contextPath: 'pipeline', 
+                       war: '**/*.war'
+            }
+        }
+        
+        stage('Sonarqube Analysis') {
+            steps {
+                withSonarQubeEnv('sonar-server') { // Corrected syntax for withSonarQubeEnv
+                    sh ''' 
+                    ${tool 'sonar'}/bin/sonar-scanner  -Dsonar.projectName=Ekart \
+                    -Dsonar.java.binaries=. \
+                    -Dsonar.projectKey=Petclinic
+                    '''
+                }
+            }
+        }
+    }
+}
